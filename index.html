@@ -57,14 +57,12 @@
       </div>
 
       <div>
-        <label>Station Z1 R Source (Ω)</label>
-        <input id="srcR" value="0.20">
-      </div>
-
-      <div>
-        <label>Station Z1 X Source (Ω)</label>
-        <input id="srcX" value="1.20">
-      </div>
+  <label>Fault Type</label>
+  <select id="faultType">
+    <option value="1PH">1 Phase to Ground</option>
+    <option value="3PH">3 Phase</option>
+  </select>
+</div>
     </div>
 
     <br>
@@ -162,8 +160,17 @@ function setStatus(msg){
   document.getElementById('status').innerHTML = msg;
 }
 
-function showLoading(){
-  document.getElementById('loading').style.display='flex';
+function showLoading(message = 'กำลังประมวลผล...'){
+
+  const loading = document.getElementById('loading');
+  const text = loading.querySelector('.box div:last-child');
+
+  if(text){
+    text.textContent = message;
+  }
+
+  loading.style.display = 'flex';
+
 }
 
 function hideLoading(){
@@ -617,7 +624,8 @@ async function trackSelectedDevice(){
     return;
   }
 
-  showLoading();
+  showLoading('กำลัง Track เส้นทางและคำนวณกระแสลัดวงจร...');
+  await delayUI();
 
   try{
 
@@ -694,7 +702,8 @@ async function trackSelectedDevice(){
       stationCode:
         feeder.substring(0,3),
 
-      transformer: 'TP1',
+      faultType:
+  document.getElementById('faultType').value,
 
       voltageKv:
         Number(
@@ -719,8 +728,9 @@ async function trackSelectedDevice(){
         GAS_API_URL
       ){
 
-        apiResult =
-          await callFaultApi(apiPayload);
+      showLoading('กำลังส่งข้อมูลไปคำนวณที่ Google Sheet...');
+      await delayUI();
+      apiResult = await callFaultApi(apiPayload);
 
       }
 
@@ -805,34 +815,39 @@ async function trackSelectedDevice(){
     /* ================= SHOW RESULT ================= */
 
     let showKA =
-      fault.ifaultA / 1000;
+  fault.ifaultA / 1000;
 
-    if(
-      apiResult
-      &&
-      apiResult.faultCurrent
-      &&
-      apiResult.faultCurrent.singleLineGround_kA
-    ){
+if(
+  apiResult
+  &&
+  apiResult.selectedFault
+  &&
+  apiResult.selectedFault.current_kA
+){
 
-      showKA =
-        apiResult.faultCurrent.singleLineGround_kA;
+  showKA =
+    apiResult.selectedFault.current_kA;
 
-    }
+}
 
-    setStatus(
+    const faultTypeText =
+  document.getElementById('faultType').value === '3PH'
+    ? '3PH'
+    : '1PH-G';
 
-      `Track สำเร็จ ไปยัง CB ` +
+setStatus(
 
-      `ระยะ ${
-        (best.path.distanceM/1000).toFixed(3)
-      } km, ` +
+  `Track สำเร็จ ไปยัง CB ` +
 
-      `I fault ≈ ${
-        Number(showKA).toFixed(3)
-      } kA`
+  `ระยะ ${
+    (best.path.distanceM/1000).toFixed(3)
+  } km, ` +
 
-    );
+  `${faultTypeText} ≈ ${
+    Number(showKA).toFixed(3)
+  } kA`
+
+);
 
     console.timeEnd('TRACK_TOTAL');
 
@@ -852,6 +867,10 @@ async function trackSelectedDevice(){
 
   }
 
+}
+
+function delayUI(ms = 50){
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function findBestCbByTopology(startNode, feeder){
@@ -1113,8 +1132,9 @@ function drawTrack(edges){
 function calculateFault(edges){
 
   const voltageKv = Number(document.getElementById('voltage').value);
-  const sourceR = Number(document.getElementById('srcR').value || 0);
-  const sourceX = Number(document.getElementById('srcX').value || 0);
+
+  const sourceR = 0;
+  const sourceX = 0;
 
   let lineR = 0;
   let lineX = 0;
